@@ -67,6 +67,22 @@ def log_prediction(features: dict, price: float):
         conn.close()
 
 
+def scale_and_predict(house_dict: dict) -> tuple[float, float, float]:
+    model = model_bundle["model"]
+    scaler = model_bundle["scaler"]
+    feature_names = model_bundle["feature_names"]
+
+    df = pd.DataFrame([house_dict])[feature_names]
+    scaled = scaler.transform(df)
+    price = float(model.predict(scaled)[0])
+
+    # Approximate confidence interval using the std of individual tree predictions
+    tree_preds = np.array([est.predict(scaled)[0] for est in model.estimators_])
+    margin = float(tree_preds.std() * 1.96)
+
+    return round(price, 4), round(max(0, price - margin), 4), round(price + margin, 4)
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
@@ -95,7 +111,15 @@ class HouseFeatures(BaseModel):
 
 class PredictionResponse(BaseModel):
     predicted_price: float
+    price_low: float
+    price_high: float
     unit: str = "100k USD"
+
+
+class BatchPredictionResponse(BaseModel):
+    results: list[PredictionResponse]
+    total: int
+    avg_predicted_price: float
 
 
 @app.get("/")
@@ -115,16 +139,26 @@ def predict(house: HouseFeatures):
     if model_bundle is None:
         raise HTTPException(status_code=503, detail="Model not loaded.")
 
-    model = model_bundle["model"]
-    scaler = model_bundle["scaler"]
-    feature_names = model_bundle["feature_names"]
+    price, low, high = scale_and_predict(house.model_dump())
+    log_prediction(house.model_dump(), price)
+    return PredictionResponse(predicted_price=price, price_low=low, price_high=high)
 
-    df = pd.DataFrame([house.model_dump()])[feature_names]
-    scaled = scaler.transform(df)
-    price = float(model.predict(scaled)[0])
 
-    log_prediction(house.model_dump(), round(price, 4))
-    return PredictionResponse(predicted_price=round(price, 4))
+@app.post("/predict/batch", response_model=BatchPredictionResponse)
+def predict_batch(houses: list[HouseFeatures]):
+    if model_bundle is None:
+        raise HTTPException(status_code=503, detail="Model not loaded.")
+    if not houses:
+        raise HTTPException(status_code=400, detail="House list cannot be empty.")
+
+    results = []
+    for house in houses:
+        price, low, high = scale_and_predict(house.model_dump())
+        log_prediction(house.model_dump(), price)
+        results.append(PredictionResponse(predicted_price=price, price_low=low, price_high=high))
+
+    avg = round(sum(r.predicted_price for r in results) / len(results), 4)
+    return BatchPredictionResponse(results=results, total=len(results), avg_predicted_price=avg)
 
 
 @app.get("/logs")

@@ -50,18 +50,35 @@ def test_health():
     assert response.json()["model_loaded"] is True
 
 
-def test_predict_returns_price():
+def test_predict_returns_price_with_interval():
     response = client.post("/predict", json=SAMPLE_HOUSE)
     assert response.status_code == 200
     data = response.json()
     assert "predicted_price" in data
+    assert "price_low" in data
+    assert "price_high" in data
     assert data["predicted_price"] > 0
+    assert data["price_low"] <= data["predicted_price"] <= data["price_high"]
 
 
 def test_expensive_house_costs_more():
     r1 = client.post("/predict", json=EXPENSIVE_HOUSE).json()["predicted_price"]
     r2 = client.post("/predict", json=CHEAP_HOUSE).json()["predicted_price"]
     assert r1 > r2
+
+
+def test_batch_predict():
+    response = client.post("/predict/batch", json=[SAMPLE_HOUSE, EXPENSIVE_HOUSE, CHEAP_HOUSE])
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 3
+    assert "avg_predicted_price" in data
+    assert len(data["results"]) == 3
+
+
+def test_batch_predict_empty_returns_400():
+    response = client.post("/predict/batch", json=[])
+    assert response.status_code == 400
 
 
 def test_logs_returns_list():
