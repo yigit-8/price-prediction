@@ -3,8 +3,6 @@ from fastapi.testclient import TestClient
 
 from src.serve import app
 
-client = TestClient(app)
-
 SAMPLE_HOUSE = {
     "MedInc": 5.0,
     "HouseAge": 20.0,
@@ -39,18 +37,24 @@ CHEAP_HOUSE = {
 }
 
 
-def test_root():
+@pytest.fixture(scope="module")
+def client():
+    with TestClient(app) as c:
+        yield c
+
+
+def test_root(client):
     response = client.get("/")
     assert response.status_code == 200
 
 
-def test_health():
+def test_health(client):
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json()["model_loaded"] is True
 
 
-def test_predict_returns_price_with_interval():
+def test_predict_returns_price_with_interval(client):
     response = client.post("/predict", json=SAMPLE_HOUSE)
     assert response.status_code == 200
     data = response.json()
@@ -61,13 +65,13 @@ def test_predict_returns_price_with_interval():
     assert data["price_low"] <= data["predicted_price"] <= data["price_high"]
 
 
-def test_expensive_house_costs_more():
+def test_expensive_house_costs_more(client):
     r1 = client.post("/predict", json=EXPENSIVE_HOUSE).json()["predicted_price"]
     r2 = client.post("/predict", json=CHEAP_HOUSE).json()["predicted_price"]
     assert r1 > r2
 
 
-def test_batch_predict():
+def test_batch_predict(client):
     response = client.post("/predict/batch", json=[SAMPLE_HOUSE, EXPENSIVE_HOUSE, CHEAP_HOUSE])
     assert response.status_code == 200
     data = response.json()
@@ -76,18 +80,18 @@ def test_batch_predict():
     assert len(data["results"]) == 3
 
 
-def test_batch_predict_empty_returns_400():
+def test_batch_predict_empty_returns_400(client):
     response = client.post("/predict/batch", json=[])
     assert response.status_code == 400
 
 
-def test_logs_returns_list():
+def test_logs_returns_list(client):
     response = client.get("/logs")
     assert response.status_code == 200
     assert isinstance(response.json(), list)
 
 
-def test_stats_structure():
+def test_stats_structure(client):
     response = client.get("/stats")
     assert response.status_code == 200
     data = response.json()
