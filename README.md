@@ -8,6 +8,20 @@ Predicts California house prices using XGBoost, with MLflow experiment tracking,
 
 The model is trained on the California Housing dataset. Given a set of block-group features (income level, house age, room count, location), it predicts the median house value in units of 100k USD.
 
+## Architecture
+
+```mermaid
+flowchart LR
+    CH[California Housing] --> T[train.py]
+    T -- model.joblib --> S[serve.py FastAPI]
+    T -- params and metrics --> M[MLflow]
+    T -- reference.csv --> D[drift.py]
+    C[Client] -- POST /predict --> S
+    S -- every prediction --> DB[(SQLite)]
+    DB -- recent inputs --> D
+    D -- Evidently report --> R[drift_report.html]
+```
+
 ## Tech Stack
 
 | Layer | Technology |
