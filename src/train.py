@@ -72,7 +72,10 @@ def train(max_depth: int, n_estimators: int, learning_rate: float) -> None:
         print(f"Metrics: {metrics}")
 
         os.makedirs(os.path.dirname(MODEL_PATH), exist_ok=True)
-        joblib.dump({"model": model, "scaler": scaler, "feature_names": list(X.columns)}, MODEL_PATH)
+        joblib.dump(
+            {"model": model, "scaler": scaler, "feature_names": list(X.columns), "rmse": metrics["rmse"]},
+            MODEL_PATH,
+        )
         X.head(200).to_csv(REFERENCE_PATH, index=False)
 
         print(f"Model saved to {MODEL_PATH}")

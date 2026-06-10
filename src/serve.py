@@ -9,7 +9,6 @@ import sqlite3
 from contextlib import asynccontextmanager
 
 import joblib
-import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel, Field
@@ -76,9 +75,8 @@ def scale_and_predict(house_dict: dict) -> tuple[float, float, float]:
     scaled = scaler.transform(df)
     price = float(model.predict(scaled)[0])
 
-    # Approximate confidence interval using the std of individual tree predictions
-    tree_preds = np.array([est.predict(scaled)[0] for est in model.estimators_])
-    margin = float(tree_preds.std() * 1.96)
+    # Approximate 95% interval from the model's test RMSE saved at training time
+    margin = float(model_bundle["rmse"] * 1.96)
 
     return round(price, 4), round(max(0, price - margin), 4), round(price + margin, 4)
 
